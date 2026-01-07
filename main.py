@@ -23,6 +23,8 @@ WATCH_CHATS = [
     -1003503245562,
     -1003291372439,
     -1003605900655,
+    -1002331275143,
+    -1001055591953,
 ]
 
 # Port for FastAPI (Render sets this automatically)
