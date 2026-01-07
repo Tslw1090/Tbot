@@ -92,7 +92,7 @@ async def forward_to_bot_b(event):
 
         # ✅ Forward only messages NOT sent by you
         await client.forward_messages(
-            BOT_B_ENTITY,
+            BOT_B_CHAT_ID,
             event.message
         )
         log_message("Forwarded to Bot B", event)
