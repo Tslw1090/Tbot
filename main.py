@@ -20,9 +20,9 @@ BOT_B_CHAT_ID = int(os.getenv("BOT_B_CHAT_ID"))
 
 # Chats (groups/channels) to monitor
 WATCH_CHATS = [
-    -1001111111111,
-    -1002222222222,
-    -1003333333333,
+    -1003503245562,
+    -1003291372439,
+    -1003605900655,
 ]
 
 # Port for FastAPI (Render sets this automatically)
@@ -86,8 +86,17 @@ async def forward_to_bot_a(event):
 @client.on(events.NewMessage(chats=BOT_A_CHAT_ID))
 async def forward_to_bot_b(event):
     try:
-        await client.forward_messages(BOT_B_CHAT_ID, event.message)
+        # ❌ Ignore messages sent by YOU
+        if event.out:
+            return
+
+        # ✅ Forward only messages NOT sent by you
+        await client.forward_messages(
+            BOT_B_ENTITY,
+            event.message
+        )
         log_message("Forwarded to Bot B", event)
+
     except Exception as e:
         print(f"Error forwarding to Bot B: {e}", flush=True)
 
