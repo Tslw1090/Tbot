@@ -1,14 +1,16 @@
 import os
 import re
-import threading
-from flask import Flask
+import asyncio
+from datetime import datetime
+from fastapi import FastAPI
+import uvicorn
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 from telethon.tl.types import MessageEntityUrl, MessageEntityTextUrl
 
-# -------------------------------------------------
+# --------------------------
 # ENV VARIABLES
-# -------------------------------------------------
+# --------------------------
 API_ID = int(os.getenv("API_ID"))
 API_HASH = os.getenv("API_HASH")
 TG_SESSION = os.getenv("TG_SESSION")
@@ -16,77 +18,89 @@ TG_SESSION = os.getenv("TG_SESSION")
 BOT_A_CHAT_ID = int(os.getenv("BOT_A_CHAT_ID"))
 BOT_B_CHAT_ID = int(os.getenv("BOT_B_CHAT_ID"))
 
-PORT = int(os.getenv("PORT", 10000))  # Render provides PORT
-
+# Chats (groups/channels) to monitor
 WATCH_CHATS = [
     -1001111111111,
     -1002222222222,
     -1003333333333,
 ]
 
-# -------------------------------------------------
-# FLASK APP (Health Endpoint)
-# -------------------------------------------------
-app = Flask(__name__)
+# Port for FastAPI (Render sets this automatically)
+PORT = int(os.getenv("PORT", 10000))
 
-@app.route("/sutaa", methods=["GET", "POST"])
-def sutaa():
-    return "<h1>chalu hai</h1>"
-
-def run_flask():
-    app.run(host="0.0.0.0", port=PORT)
-
-# -------------------------------------------------
-# TELEGRAM CLIENT
-# -------------------------------------------------
-client = TelegramClient(
-    StringSession(TG_SESSION),
-    API_ID,
-    API_HASH
-)
-
+# --------------------------
+# URL DETECTION FUNCTION
+# --------------------------
 URL_REGEX = re.compile(r"https?://|www\.", re.IGNORECASE)
 
 def contains_url(message):
+    """Return True if message contains any URL"""
     if message.entities:
         for entity in message.entities:
             if isinstance(entity, (MessageEntityUrl, MessageEntityTextUrl)):
                 return True
-
     if message.text and URL_REGEX.search(message.text):
         return True
-
     return False
 
-# -------------------------------------------------
-# 1️⃣ Monitor chats → forward to Bot A
-# -------------------------------------------------
+# --------------------------
+# TELEGRAM CLIENT SETUP
+# --------------------------
+client = TelegramClient(StringSession(TG_SESSION), API_ID, API_HASH)
+
+# --------------------------
+# FASTAPI HEALTH ENDPOINT
+# --------------------------
+app = FastAPI()
+
+@app.get("/sutaa")
+@app.post("/sutaa")
+async def sutaa():
+    return {"status": "chalu hai"}
+
+# --------------------------
+# HELPER FUNCTION TO LOG
+# --------------------------
+def log_message(prefix, event):
+    chat_name = getattr(event.chat, 'title', str(event.chat_id))
+    sender_name = getattr(event.sender, 'first_name', 'Unknown')
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    text_preview = (event.text or "").replace("\n", " ")[:100]
+    print(f"[{timestamp}] {prefix} | Chat: {chat_name} | Sender: {sender_name} | Text: {text_preview}", flush=True)
+
+# --------------------------
+# 1️⃣ MONITOR MULTIPLE CHATS → FORWARD TO BOT A
+# --------------------------
 @client.on(events.NewMessage(chats=WATCH_CHATS))
 async def forward_to_bot_a(event):
-    if contains_url(event.message):
-        await client.forward_messages(
-            BOT_A_CHAT_ID,
-            event.message
-        )
+    try:
+        if contains_url(event.message):
+            await client.forward_messages(BOT_A_CHAT_ID, event.message)
+            log_message("Forwarded to Bot A", event)
+    except Exception as e:
+        print(f"Error forwarding to Bot A: {e}", flush=True)
 
-# -------------------------------------------------
-# 2️⃣ Monitor Bot A → forward to Bot B
-# -------------------------------------------------
+# --------------------------
+# 2️⃣ MONITOR BOT A → FORWARD TO BOT B
+# --------------------------
 @client.on(events.NewMessage(chats=BOT_A_CHAT_ID))
 async def forward_to_bot_b(event):
-    await client.forward_messages(
-        BOT_B_CHAT_ID,
-        event.message
-    )
+    try:
+        await client.forward_messages(BOT_B_CHAT_ID, event.message)
+        log_message("Forwarded to Bot B", event)
+    except Exception as e:
+        print(f"Error forwarding to Bot B: {e}", flush=True)
 
-# -------------------------------------------------
-# START EVERYTHING
-# -------------------------------------------------
+# --------------------------
+# START TELEGRAM CLIENT + FASTAPI
+# --------------------------
 if __name__ == "__main__":
-    # Start Flask in background
-    threading.Thread(target=run_flask, daemon=True).start()
+    async def main():
+        await client.start()
+        print("Telegram monitor started... | /sutaa endpoint live", flush=True)
+        # Run FastAPI + Telethon concurrently
+        config = uvicorn.Config(app, host="0.0.0.0", port=PORT, log_level="info")
+        server = uvicorn.Server(config)
+        await asyncio.gather(server.serve(), client.run_until_disconnected())
 
-    # Start Telegram client
-    client.start()
-    print("Telegram monitor started | /sutaa endpoint live")
-    client.run_until_disconnected()
+    asyncio.run(main())
