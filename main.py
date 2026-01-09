@@ -56,6 +56,7 @@ client = TelegramClient(StringSession(TG_SESSION), API_ID, API_HASH)
 app = FastAPI()
 
 @app.get("/sutaa")
+@app.head("/sutaa")
 @app.post("/sutaa")
 async def sutaa():
     return {"status": "chalu hai"}
