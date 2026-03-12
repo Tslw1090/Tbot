@@ -20,7 +20,7 @@ BOT_B_CHAT_ID = int(os.getenv("BOT_B_CHAT_ID"))
 
 # Chats (groups/channels) to monitor
 WATCH_CHATS = [
-    -1003503245562,
+    -1003727535430,
     -1003291372439,
     -1003605900655,
     -1002331275143,
